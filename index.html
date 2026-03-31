@@ -7,409 +7,765 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
     <link rel="manifest" href="manifest.json">
-    <title>Recorder</title>
+    <title>Shuttle Recorder</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #000;
-            color: #fff;
-            overflow: hidden;
-            height: 100vh;
-            height: 100dvh;
-            display: flex;
-            flex-direction: column;
+            background: #000; color: #fff;
+            overflow: hidden; height: 100vh; height: 100dvh;
+            display: flex; flex-direction: column;
         }
 
-        /* Camera preview */
-        .preview-container {
-            flex: 1;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #111;
-            overflow: hidden;
+        /* ── Screens ── */
+        .screen { display: none; flex-direction: column; height: 100%; }
+        .screen.active { display: flex; }
+
+        /* ── Pairing Screen ── */
+        .pairing-screen {
+            align-items: center; justify-content: center; gap: 20px; padding: 24px;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 100%);
         }
 
-        video#preview {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
+        .pairing-screen h1 { font-size: 24px; font-weight: 700; }
+        .pairing-screen p.sub { font-size: 14px; color: #888; text-align: center; max-width: 280px; }
 
-        /* Recording timer overlay */
-        .timer {
-            position: absolute;
-            top: 16px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 16px;
-            font-variant-numeric: tabular-nums;
-            display: none;
-            align-items: center;
-            gap: 8px;
+        .btn-primary {
+            width: 100%; max-width: 280px; padding: 16px; border: none; border-radius: 14px;
+            font-size: 17px; font-weight: 600; cursor: pointer; transition: all 0.15s;
         }
+        .btn-primary:active { transform: scale(0.97); }
 
-        .timer.visible {
-            display: flex;
+        .btn-create { background: #e94560; color: #fff; }
+        .btn-join { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+
+        .divider { color: #555; font-size: 13px; margin: 4px 0; }
+
+        /* ── Code Display ── */
+        .code-display {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px; padding: 24px; text-align: center; width: 100%; max-width: 280px;
         }
-
-        .timer .dot {
-            width: 10px;
-            height: 10px;
-            background: #e94560;
-            border-radius: 50%;
-            animation: blink 1s infinite;
-        }
-
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-
-        /* Placeholder when camera is off */
-        .placeholder {
-            text-align: center;
-            color: #555;
-        }
-
-        .placeholder .icon {
-            font-size: 64px;
-            margin-bottom: 12px;
-        }
-
-        .placeholder p {
-            font-size: 16px;
-        }
-
-        /* Controls bar */
-        .controls {
-            background: #111;
-            padding: 20px;
-            padding-bottom: max(20px, env(safe-area-inset-bottom));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 32px;
-        }
-
-        /* Record / Stop button */
-        .btn-record {
-            width: 72px;
-            height: 72px;
-            border-radius: 50%;
-            border: 4px solid #fff;
-            background: transparent;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            -webkit-user-select: none;
-            user-select: none;
-        }
-
-        .btn-record .inner {
-            width: 54px;
-            height: 54px;
-            background: #e94560;
-            border-radius: 50%;
-            transition: all 0.25s;
-        }
-
-        .btn-record.recording .inner {
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
-            background: #e94560;
-        }
-
-        .btn-record:active {
-            transform: scale(0.92);
-        }
-
-        /* Side buttons */
-        .btn-side {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            border: none;
-            background: rgba(255, 255, 255, 0.12);
-            color: #fff;
-            font-size: 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.15s;
-        }
-
-        .btn-side:active {
-            transform: scale(0.9);
-            background: rgba(255, 255, 255, 0.25);
-        }
-
-        .btn-side:disabled {
-            opacity: 0.3;
-            pointer-events: none;
-        }
-
-        .btn-side svg {
-            width: 24px;
-            height: 24px;
-            fill: #fff;
-        }
-
-        /* Saved toast */
-        .toast {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-100px);
-            background: rgba(40, 167, 69, 0.95);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 500;
-            transition: transform 0.3s ease;
-            z-index: 100;
-            white-space: nowrap;
-        }
-
-        .toast.show {
-            transform: translateX(-50%) translateY(0);
-        }
-
-        /* Error state */
-        .error-msg {
-            text-align: center;
-            padding: 40px 20px;
+        .code-display .label { font-size: 13px; color: #888; margin-bottom: 8px; }
+        .code-display .code {
+            font-size: 36px; font-weight: 800; letter-spacing: 8px; font-family: monospace;
             color: #e94560;
         }
+        .code-display .status { font-size: 13px; color: #888; margin-top: 12px; }
+        .code-display .status.paired { color: #28a745; }
 
-        .error-msg p {
-            margin-top: 8px;
-            color: #888;
-            font-size: 14px;
+        /* ── Code Input ── */
+        .code-input-group { width: 100%; max-width: 280px; }
+        .code-input {
+            width: 100%; padding: 16px; border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 14px; background: rgba(255,255,255,0.05); color: #fff;
+            font-size: 24px; text-align: center; letter-spacing: 8px; font-family: monospace;
+            text-transform: uppercase; outline: none;
         }
+        .code-input::placeholder { letter-spacing: 2px; font-size: 16px; color: #555; }
+        .code-input:focus { border-color: #e94560; }
+
+        .btn-submit {
+            width: 100%; max-width: 280px; padding: 14px; border: none; border-radius: 14px;
+            background: #e94560; color: #fff; font-size: 16px; font-weight: 600;
+            cursor: pointer; margin-top: 12px;
+        }
+        .btn-submit:disabled { opacity: 0.4; pointer-events: none; }
+
+        .btn-back {
+            background: none; border: none; color: #888; font-size: 14px;
+            cursor: pointer; margin-top: 8px; padding: 8px;
+        }
+
+        /* ── Sync Status ── */
+        .sync-status {
+            font-size: 13px; color: #888; text-align: center; margin-top: 8px;
+            min-height: 20px;
+        }
+        .sync-status.synced { color: #28a745; }
+        .sync-status.error { color: #e94560; }
+
+        /* ── Recording Screen ── */
+        .preview-container {
+            flex: 1; position: relative; display: flex;
+            align-items: center; justify-content: center;
+            background: #111; overflow: hidden;
+        }
+
+        video#preview { width: 100%; height: 100%; object-fit: cover; }
+
+        .timer {
+            position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 6px 16px; border-radius: 20px; font-size: 16px;
+            font-variant-numeric: tabular-nums; display: none;
+            align-items: center; gap: 8px;
+        }
+        .timer.visible { display: flex; }
+        .timer .dot { width: 10px; height: 10px; background: #e94560; border-radius: 50%; animation: blink 1s infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* Connection badge */
+        .conn-badge {
+            position: absolute; top: 16px; right: 16px;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 6px 12px; border-radius: 20px; font-size: 12px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .conn-badge .indicator {
+            width: 8px; height: 8px; border-radius: 50%; background: #28a745;
+        }
+        .conn-badge .indicator.disconnected { background: #e94560; }
+
+        /* Match info */
+        .match-info {
+            position: absolute; top: 16px; left: 16px;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 6px 12px; border-radius: 20px; font-size: 12px;
+            font-family: monospace; letter-spacing: 2px;
+        }
+
+        .controls {
+            background: #111; padding: 20px;
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+            display: flex; align-items: center; justify-content: center; gap: 32px;
+        }
+
+        .btn-record {
+            width: 72px; height: 72px; border-radius: 50%; border: 4px solid #fff;
+            background: transparent; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s; -webkit-user-select: none; user-select: none;
+        }
+        .btn-record .inner {
+            width: 54px; height: 54px; background: #e94560;
+            border-radius: 50%; transition: all 0.25s;
+        }
+        .btn-record.recording .inner { width: 28px; height: 28px; border-radius: 6px; }
+        .btn-record:active { transform: scale(0.92); }
+        .btn-record:disabled { opacity: 0.3; pointer-events: none; }
+
+        .btn-side {
+            width: 48px; height: 48px; border-radius: 50%; border: none;
+            background: rgba(255,255,255,0.12); color: #fff; font-size: 20px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s;
+        }
+        .btn-side:active { transform: scale(0.9); background: rgba(255,255,255,0.25); }
+        .btn-side:disabled { opacity: 0.3; pointer-events: none; }
+        .btn-side svg { width: 24px; height: 24px; fill: #fff; }
+
+        /* Toast */
+        .toast {
+            position: fixed; top: 20px; left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: rgba(40,167,69,0.95); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 12px 24px; border-radius: 12px;
+            font-size: 15px; font-weight: 500;
+            transition: transform 0.3s ease; z-index: 100; white-space: nowrap;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        /* Waiting overlay */
+        .waiting-overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.7);
+            display: none; align-items: center; justify-content: center;
+            flex-direction: column; gap: 12px; z-index: 50;
+        }
+        .waiting-overlay.visible { display: flex; }
+        .waiting-overlay .spinner {
+            width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.2);
+            border-top-color: #e94560; border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .waiting-overlay p { font-size: 14px; color: #ccc; }
     </style>
 </head>
 <body>
+
+<!-- ═══════ SCREEN 1: PAIRING ═══════ -->
+<div class="screen pairing-screen active" id="screenPairing">
+    <h1>Shuttle Recorder</h1>
+    <p class="sub">Pair two phones to record a match from both sides with synced timestamps.</p>
+
+    <!-- Initial buttons -->
+    <div id="pairingButtons">
+        <button class="btn-primary btn-create" id="btnCreate">Create Room</button>
+        <div class="divider">or</div>
+        <button class="btn-primary btn-join" id="btnJoin">Join Room</button>
+    </div>
+
+    <!-- Code display (after creating) -->
+    <div class="code-display" id="codeDisplay" style="display:none">
+        <div class="label">Share this code</div>
+        <div class="code" id="roomCodeText">------</div>
+        <div class="status" id="codeStatus">Waiting for opponent...</div>
+    </div>
+
+    <!-- Code input (after clicking join) -->
+    <div class="code-input-group" id="codeInputGroup" style="display:none">
+        <input class="code-input" id="codeInput" type="text" maxlength="6" placeholder="Enter code" autocomplete="off" />
+        <button class="btn-submit" id="btnSubmitCode" disabled>Join</button>
+    </div>
+
+    <div class="sync-status" id="syncStatus"></div>
+    <button class="btn-back" id="btnBackToPairing" style="display:none">Back</button>
+</div>
+
+<!-- ═══════ SCREEN 2: RECORDING ═══════ -->
+<div class="screen" id="screenRecording">
     <div class="preview-container">
         <video id="preview" autoplay muted playsinline></video>
-
-        <div class="placeholder" id="placeholder">
-            <div class="icon">&#127909;</div>
-            <p>Tap record to start</p>
-        </div>
 
         <div class="timer" id="timer">
             <span class="dot"></span>
             <span id="timerText">00:00</span>
+        </div>
+
+        <div class="match-info" id="matchInfo">------</div>
+        <div class="conn-badge" id="connBadge">
+            <span class="indicator" id="connIndicator"></span>
+            <span id="connText">Connected</span>
+        </div>
+
+        <div class="waiting-overlay" id="waitingOverlay">
+            <div class="spinner"></div>
+            <p id="waitingText">Waiting for partner to start...</p>
         </div>
     </div>
 
     <div class="toast" id="toast">Video saved!</div>
 
     <div class="controls">
-        <!-- Switch camera -->
         <button class="btn-side" id="btnSwitch" title="Switch camera">
             <svg viewBox="0 0 24 24"><path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/><path d="M12 10.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5z"/></svg>
         </button>
 
-        <!-- Record / Stop -->
         <button class="btn-record" id="btnRecord" title="Record">
             <div class="inner"></div>
         </button>
 
-        <!-- Download last video -->
         <button class="btn-side" id="btnDownload" disabled title="Download last recording">
             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
         </button>
     </div>
+</div>
 
-    <script>
-        const preview = document.getElementById('preview');
-        const placeholder = document.getElementById('placeholder');
-        const timer = document.getElementById('timer');
-        const timerText = document.getElementById('timerText');
-        const toast = document.getElementById('toast');
-        const btnRecord = document.getElementById('btnRecord');
-        const btnSwitch = document.getElementById('btnSwitch');
-        const btnDownload = document.getElementById('btnDownload');
+<!-- ═══════ Firebase SDK ═══════ -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
 
-        let mediaRecorder = null;
-        let recordedChunks = [];
-        let stream = null;
-        let timerInterval = null;
-        let startTime = 0;
-        let isRecording = false;
-        let facingMode = 'environment'; // rear camera by default
-        let lastBlobUrl = null;
+// ── Firebase config ──
+const app = initializeApp({
+    apiKey: "AIzaSyD3VM2QANmrfwAzrMw2egmyCcja7QdVZDY",
+    authDomain: "shuttle-recorder-29916.firebaseapp.com",
+    databaseURL: "https://shuttle-recorder-29916-default-rtdb.firebaseio.com",
+    projectId: "shuttle-recorder-29916",
+    storageBucket: "shuttle-recorder-29916.firebasestorage.app",
+    messagingSenderId: "1041259730311",
+    appId: "1:1041259730311:web:c07a10cd3f12ef94f02f22"
+});
+const db = getDatabase(app);
 
-        // Pick a supported mime type
-        function getSupportedMimeType() {
-            const types = [
-                'video/webm;codecs=vp9,opus',
-                'video/webm;codecs=vp8,opus',
-                'video/webm',
-                'video/mp4',
-            ];
-            for (const type of types) {
-                if (MediaRecorder.isTypeSupported(type)) return type;
-            }
-            return '';
+// ── State ──
+let roomCode = '';
+let playerId = '';  // 'p1' or 'p2'
+let clockOffset = 0; // ms offset to align with partner
+let isRecording = false;
+let mediaRecorder = null;
+let recordedChunks = [];
+let stream = null;
+let facingMode = 'environment';
+let timerInterval = null;
+let recordStartEpoch = 0;
+let frameTimestamps = [];
+let lastBlobUrl = null;
+let unsubscribers = [];
+
+// ── DOM refs ──
+const $ = id => document.getElementById(id);
+const screenPairing = $('screenPairing');
+const screenRecording = $('screenRecording');
+const pairingButtons = $('pairingButtons');
+const codeDisplay = $('codeDisplay');
+const codeInputGroup = $('codeInputGroup');
+const roomCodeText = $('roomCodeText');
+const codeStatus = $('codeStatus');
+const codeInput = $('codeInput');
+const btnSubmitCode = $('btnSubmitCode');
+const syncStatus = $('syncStatus');
+const btnBackToPairing = $('btnBackToPairing');
+const preview = $('preview');
+const timer = $('timer');
+const timerText = $('timerText');
+const matchInfo = $('matchInfo');
+const connBadge = $('connBadge');
+const connIndicator = $('connIndicator');
+const connText = $('connText');
+const waitingOverlay = $('waitingOverlay');
+const waitingText = $('waitingText');
+const toast = $('toast');
+const btnRecord = $('btnRecord');
+const btnSwitch = $('btnSwitch');
+const btnDownload = $('btnDownload');
+
+// ═══════════════════════════════════
+// PAIRING
+// ═══════════════════════════════════
+
+function generateCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+}
+
+$('btnCreate').addEventListener('click', async () => {
+    roomCode = generateCode();
+    playerId = 'p1';
+    pairingButtons.style.display = 'none';
+    codeDisplay.style.display = 'block';
+    btnBackToPairing.style.display = 'block';
+    roomCodeText.textContent = roomCode;
+    codeStatus.textContent = 'Waiting for opponent...';
+    codeStatus.className = 'status';
+    syncStatus.textContent = '';
+
+    // Write room to Firebase
+    await set(ref(db, `rooms/${roomCode}`), {
+        p1: { joined: true, online: true },
+        status: 'waiting',
+        createdAt: Date.now()
+    });
+
+    // Clean up on disconnect
+    onDisconnect(ref(db, `rooms/${roomCode}/p1/online`)).set(false);
+
+    // Listen for p2 joining
+    const unsub = onValue(ref(db, `rooms/${roomCode}/status`), (snap) => {
+        const status = snap.val();
+        if (status === 'paired') {
+            codeStatus.textContent = 'Paired!';
+            codeStatus.className = 'status paired';
+            syncStatus.textContent = 'Starting clock sync...';
+            startClockSync();
+        }
+    });
+    unsubscribers.push(unsub);
+});
+
+$('btnJoin').addEventListener('click', () => {
+    pairingButtons.style.display = 'none';
+    codeInputGroup.style.display = 'block';
+    btnBackToPairing.style.display = 'block';
+    codeInput.focus();
+});
+
+codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    btnSubmitCode.disabled = codeInput.value.length !== 6;
+});
+
+btnSubmitCode.addEventListener('click', async () => {
+    roomCode = codeInput.value;
+    playerId = 'p2';
+    btnSubmitCode.disabled = true;
+    syncStatus.textContent = 'Joining...';
+
+    // Check if room exists
+    const snap = await get(ref(db, `rooms/${roomCode}`));
+    if (!snap.exists()) {
+        syncStatus.textContent = 'Room not found. Check the code.';
+        syncStatus.className = 'sync-status error';
+        btnSubmitCode.disabled = false;
+        return;
+    }
+
+    // Join the room
+    await update(ref(db, `rooms/${roomCode}`), {
+        'p2/joined': true,
+        'p2/online': true,
+        'status': 'paired'
+    });
+
+    onDisconnect(ref(db, `rooms/${roomCode}/p2/online`)).set(false);
+
+    codeInputGroup.style.display = 'none';
+    codeDisplay.style.display = 'block';
+    roomCodeText.textContent = roomCode;
+    codeStatus.textContent = 'Paired!';
+    codeStatus.className = 'status paired';
+    syncStatus.textContent = 'Starting clock sync...';
+
+    startClockSync();
+});
+
+btnBackToPairing.addEventListener('click', () => {
+    // Cleanup
+    unsubscribers.forEach(fn => fn());
+    unsubscribers = [];
+    if (roomCode && playerId) {
+        remove(ref(db, `rooms/${roomCode}/${playerId}`));
+    }
+    roomCode = '';
+    playerId = '';
+    pairingButtons.style.display = '';
+    codeDisplay.style.display = 'none';
+    codeInputGroup.style.display = 'none';
+    btnBackToPairing.style.display = 'none';
+    syncStatus.textContent = '';
+    syncStatus.className = 'sync-status';
+    codeInput.value = '';
+    btnSubmitCode.disabled = true;
+});
+
+// ═══════════════════════════════════
+// CLOCK SYNC (NTP-style via Firebase)
+// ═══════════════════════════════════
+
+async function startClockSync() {
+    syncStatus.textContent = 'Syncing clocks...';
+    const partnerId = playerId === 'p1' ? 'p2' : 'p1';
+    const syncRef = ref(db, `rooms/${roomCode}/sync`);
+    const offsets = [];
+
+    if (playerId === 'p1') {
+        // P1 initiates: write timestamps, P2 responds
+        for (let i = 0; i < 10; i++) {
+            const t1 = performance.now() + performance.timeOrigin; // epoch ms
+            await set(ref(db, `rooms/${roomCode}/sync/ping`), { from: 'p1', t1, i });
+
+            // Wait for pong
+            const pong = await waitForValue(ref(db, `rooms/${roomCode}/sync/pong`), v => v && v.i === i);
+            const t4 = performance.now() + performance.timeOrigin;
+            const t2 = pong.t2; // P2's receive time
+            const t3 = pong.t3; // P2's send time
+
+            const roundTrip = (t4 - t1) - (t3 - t2);
+            const offset = ((t2 - t1) + (t3 - t4)) / 2;
+            offsets.push(offset);
+
+            syncStatus.textContent = `Syncing clocks... (${i + 1}/10)`;
         }
 
-        async function startCamera() {
-            // Stop any existing stream
-            if (stream) {
-                stream.getTracks().forEach(t => t.stop());
-            }
+        // Median offset
+        offsets.sort((a, b) => a - b);
+        clockOffset = offsets[Math.floor(offsets.length / 2)];
 
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-                    audio: true,
-                });
-                preview.srcObject = stream;
-                placeholder.style.display = 'none';
-                return true;
-            } catch (err) {
-                console.error('Camera error:', err);
-                placeholder.innerHTML = `
-                    <div class="error-msg">
-                        <div class="icon">&#128274;</div>
-                        <strong>Camera access denied</strong>
-                        <p>Allow camera & microphone access in your browser settings and reload.</p>
-                    </div>`;
-                return false;
-            }
-        }
+        await set(ref(db, `rooms/${roomCode}/sync/result`), { offset: clockOffset, by: 'p1' });
+        syncStatus.textContent = `Synced! Offset: ${clockOffset.toFixed(1)}ms`;
+        syncStatus.className = 'sync-status synced';
 
-        function startRecording() {
-            recordedChunks = [];
-            const mimeType = getSupportedMimeType();
-            const options = mimeType ? { mimeType } : {};
+        setTimeout(() => goToRecordingScreen(), 800);
 
-            try {
-                mediaRecorder = new MediaRecorder(stream, options);
-            } catch (e) {
-                mediaRecorder = new MediaRecorder(stream);
-            }
+    } else {
+        // P2 responds to pings
+        let responded = 0;
+        const unsub = onValue(ref(db, `rooms/${roomCode}/sync/ping`), async (snap) => {
+            const data = snap.val();
+            if (!data || data.from !== 'p1') return;
 
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) recordedChunks.push(e.data);
-            };
+            const t2 = performance.now() + performance.timeOrigin;
+            // Small delay to write response
+            const t3 = performance.now() + performance.timeOrigin;
+            await set(ref(db, `rooms/${roomCode}/sync/pong`), { t2, t3, i: data.i });
+            responded++;
+            syncStatus.textContent = `Syncing clocks... (${responded}/10)`;
+        });
+        unsubscribers.push(unsub);
 
-            mediaRecorder.onstop = () => {
-                saveRecording();
-            };
+        // Wait for result
+        const result = await waitForValue(ref(db, `rooms/${roomCode}/sync/result`), v => v && v.by === 'p1');
+        clockOffset = -result.offset; // Reverse offset for P2
+        syncStatus.textContent = `Synced! Offset: ${clockOffset.toFixed(1)}ms`;
+        syncStatus.className = 'sync-status synced';
 
-            mediaRecorder.start(100); // collect data every 100ms
-            isRecording = true;
-            btnRecord.classList.add('recording');
-            btnSwitch.disabled = true;
-            timer.classList.add('visible');
-            startTime = Date.now();
-            updateTimer();
-            timerInterval = setInterval(updateTimer, 500);
-        }
+        setTimeout(() => goToRecordingScreen(), 800);
+    }
+}
 
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            isRecording = false;
-            btnRecord.classList.remove('recording');
-            btnSwitch.disabled = false;
-            timer.classList.remove('visible');
-            clearInterval(timerInterval);
-        }
+function waitForValue(dbRef, condition, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            unsub();
+            reject(new Error('Sync timeout'));
+        }, timeoutMs);
 
-        function saveRecording() {
-            const mimeType = mediaRecorder.mimeType || 'video/webm';
-            const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-            const blob = new Blob(recordedChunks, { type: mimeType });
-
-            // Revoke old blob url
-            if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
-            lastBlobUrl = URL.createObjectURL(blob);
-
-            // Auto-download
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            const a = document.createElement('a');
-            a.href = lastBlobUrl;
-            a.download = `recording-${timestamp}.${ext}`;
-            a.click();
-
-            btnDownload.disabled = false;
-            showToast('Video saved to Downloads!');
-        }
-
-        function updateTimer() {
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
-            const secs = String(elapsed % 60).padStart(2, '0');
-            timerText.textContent = `${mins}:${secs}`;
-        }
-
-        function showToast(msg) {
-            toast.textContent = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2500);
-        }
-
-        // Event listeners
-        btnRecord.addEventListener('click', async () => {
-            if (!isRecording) {
-                if (!stream) {
-                    const ok = await startCamera();
-                    if (!ok) return;
-                }
-                startRecording();
-            } else {
-                stopRecording();
+        const unsub = onValue(dbRef, (snap) => {
+            const val = snap.val();
+            if (condition(val)) {
+                clearTimeout(timer);
+                unsub();
+                resolve(val);
             }
         });
+    });
+}
 
-        btnSwitch.addEventListener('click', async () => {
-            facingMode = facingMode === 'environment' ? 'user' : 'environment';
-            await startCamera();
+// ═══════════════════════════════════
+// RECORDING SCREEN
+// ═══════════════════════════════════
+
+async function goToRecordingScreen() {
+    screenPairing.classList.remove('active');
+    screenRecording.classList.add('active');
+    matchInfo.textContent = roomCode;
+
+    await startCamera();
+    listenForRecordingSignals();
+    listenForPartnerOnline();
+}
+
+async function startCamera() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+            audio: true,
         });
+        preview.srcObject = stream;
+        return true;
+    } catch (err) {
+        console.error('Camera error:', err);
+        showToast('Camera access denied');
+        return false;
+    }
+}
 
-        btnDownload.addEventListener('click', () => {
-            if (lastBlobUrl) {
-                const ext = (mediaRecorder && mediaRecorder.mimeType || '').includes('mp4') ? 'mp4' : 'webm';
-                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-                const a = document.createElement('a');
-                a.href = lastBlobUrl;
-                a.download = `recording-${timestamp}.${ext}`;
-                a.click();
-            }
-        });
+// ── Listen for start/stop signals ──
+function listenForRecordingSignals() {
+    const unsub = onValue(ref(db, `rooms/${roomCode}/recording`), (snap) => {
+        const data = snap.val();
+        if (!data) return;
 
-        // Start camera on load
-        startCamera();
-
-        // Register service worker
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
+        if (data.action === 'start' && !isRecording) {
+            beginRecording(data.startedBy);
+        } else if (data.action === 'stop' && isRecording) {
+            endRecording(false); // false = triggered by partner
         }
-    </script>
+    });
+    unsubscribers.push(unsub);
+}
+
+function listenForPartnerOnline() {
+    const partnerId = playerId === 'p1' ? 'p2' : 'p1';
+    const unsub = onValue(ref(db, `rooms/${roomCode}/${partnerId}/online`), (snap) => {
+        const online = snap.val();
+        if (online) {
+            connIndicator.className = 'indicator';
+            connText.textContent = 'Connected';
+        } else {
+            connIndicator.className = 'indicator disconnected';
+            connText.textContent = 'Partner offline';
+        }
+    });
+    unsubscribers.push(unsub);
+}
+
+// ── Record button ──
+btnRecord.addEventListener('click', async () => {
+    if (!isRecording) {
+        // Signal both phones to start
+        await set(ref(db, `rooms/${roomCode}/recording`), {
+            action: 'start',
+            startedBy: playerId,
+            epoch: performance.now() + performance.timeOrigin
+        });
+    } else {
+        // Signal both phones to stop
+        await set(ref(db, `rooms/${roomCode}/recording`), {
+            action: 'stop',
+            stoppedBy: playerId,
+            epoch: performance.now() + performance.timeOrigin
+        });
+    }
+});
+
+function beginRecording(startedBy) {
+    if (isRecording) return;
+    recordedChunks = [];
+    frameTimestamps = [];
+
+    const mimeType = getSupportedMimeType();
+    const options = mimeType ? { mimeType } : {};
+
+    try { mediaRecorder = new MediaRecorder(stream, options); }
+    catch (e) { mediaRecorder = new MediaRecorder(stream); }
+
+    mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => saveRecording();
+    mediaRecorder.start(100);
+
+    isRecording = true;
+    recordStartEpoch = performance.now() + performance.timeOrigin + clockOffset;
+    btnRecord.classList.add('recording');
+    btnSwitch.disabled = true;
+    timer.classList.add('visible');
+    waitingOverlay.classList.remove('visible');
+
+    const startMs = Date.now();
+    timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startMs) / 1000);
+        timerText.textContent =
+            String(Math.floor(elapsed / 60)).padStart(2, '0') + ':' +
+            String(elapsed % 60).padStart(2, '0');
+    }, 500);
+
+    // Start logging frame timestamps
+    startFrameLogging();
+
+    showToast(startedBy === playerId ? 'Recording started' : 'Partner started recording');
+}
+
+function endRecording(selfTriggered = true) {
+    if (!isRecording) return;
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+    isRecording = false;
+    btnRecord.classList.remove('recording');
+    btnSwitch.disabled = false;
+    timer.classList.remove('visible');
+    clearInterval(timerInterval);
+    stopFrameLogging();
+}
+
+// ── Frame timestamp logging ──
+let frameLoggingActive = false;
+
+function startFrameLogging() {
+    frameLoggingActive = true;
+    const videoEl = preview;
+
+    if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+        // High-precision per-frame timestamps
+        function onFrame(now, metadata) {
+            if (!frameLoggingActive) return;
+            frameTimestamps.push({
+                frame: frameTimestamps.length,
+                epoch: performance.now() + performance.timeOrigin + clockOffset,
+                mediaTime: metadata.mediaTime,
+                presentedFrames: metadata.presentedFrames
+            });
+            videoEl.requestVideoFrameCallback(onFrame);
+        }
+        videoEl.requestVideoFrameCallback(onFrame);
+    } else {
+        // Fallback: log at ~30fps using requestAnimationFrame
+        function onFrame() {
+            if (!frameLoggingActive) return;
+            frameTimestamps.push({
+                frame: frameTimestamps.length,
+                epoch: performance.now() + performance.timeOrigin + clockOffset
+            });
+            requestAnimationFrame(onFrame);
+        }
+        requestAnimationFrame(onFrame);
+    }
+}
+
+function stopFrameLogging() {
+    frameLoggingActive = false;
+}
+
+// ── Save recording + metadata ──
+function saveRecording() {
+    const mimeType = mediaRecorder.mimeType || 'video/webm';
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(recordedChunks, { type: mimeType });
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const baseName = `${roomCode}_${playerId}_${ts}`;
+
+    // Release old blob
+    if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
+    lastBlobUrl = URL.createObjectURL(blob);
+
+    // Download video
+    downloadFile(lastBlobUrl, `${baseName}.${ext}`);
+
+    // Build metadata
+    const metadata = {
+        roomCode,
+        playerId,
+        clockOffset,
+        recordStartEpoch,
+        recordStopEpoch: performance.now() + performance.timeOrigin + clockOffset,
+        totalFrames: frameTimestamps.length,
+        fps: frameTimestamps.length > 1
+            ? Math.round(1000 * (frameTimestamps.length - 1) /
+                (frameTimestamps[frameTimestamps.length - 1].epoch - frameTimestamps[0].epoch))
+            : 0,
+        frames: frameTimestamps
+    };
+
+    // Download metadata JSON
+    const metaBlob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' });
+    const metaUrl = URL.createObjectURL(metaBlob);
+    downloadFile(metaUrl, `${baseName}_timestamps.json`);
+    setTimeout(() => URL.revokeObjectURL(metaUrl), 1000);
+
+    btnDownload.disabled = false;
+    showToast('Video + timestamps saved!');
+}
+
+function downloadFile(url, filename) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+}
+
+// ── Utility ──
+function getSupportedMimeType() {
+    const types = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4',
+    ];
+    for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return '';
+}
+
+function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// ── Switch camera ──
+btnSwitch.addEventListener('click', async () => {
+    facingMode = facingMode === 'environment' ? 'user' : 'environment';
+    await startCamera();
+});
+
+// ── Re-download last video ──
+btnDownload.addEventListener('click', () => {
+    if (lastBlobUrl) {
+        const ext = (mediaRecorder?.mimeType || '').includes('mp4') ? 'mp4' : 'webm';
+        const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        downloadFile(lastBlobUrl, `${roomCode}_${playerId}_${ts}.${ext}`);
+    }
+});
+
+// ── Service worker ──
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+}
+
+</script>
 </body>
 </html>
