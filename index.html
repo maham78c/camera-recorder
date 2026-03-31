@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="manifest.json">
+    <title>Recorder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Camera preview */
+        .preview-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #111;
+            overflow: hidden;
+        }
+
+        video#preview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Recording timer overlay */
+        .timer {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 16px;
+            font-variant-numeric: tabular-nums;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .timer.visible {
+            display: flex;
+        }
+
+        .timer .dot {
+            width: 10px;
+            height: 10px;
+            background: #e94560;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Placeholder when camera is off */
+        .placeholder {
+            text-align: center;
+            color: #555;
+        }
+
+        .placeholder .icon {
+            font-size: 64px;
+            margin-bottom: 12px;
+        }
+
+        .placeholder p {
+            font-size: 16px;
+        }
+
+        /* Controls bar */
+        .controls {
+            background: #111;
+            padding: 20px;
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 32px;
+        }
+
+        /* Record / Stop button */
+        .btn-record {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: 4px solid #fff;
+            background: transparent;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .btn-record .inner {
+            width: 54px;
+            height: 54px;
+            background: #e94560;
+            border-radius: 50%;
+            transition: all 0.25s;
+        }
+
+        .btn-record.recording .inner {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: #e94560;
+        }
+
+        .btn-record:active {
+            transform: scale(0.92);
+        }
+
+        /* Side buttons */
+        .btn-side {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .btn-side:active {
+            transform: scale(0.9);
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .btn-side:disabled {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .btn-side svg {
+            width: 24px;
+            height: 24px;
+            fill: #fff;
+        }
+
+        /* Saved toast */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: rgba(40, 167, 69, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 500;
+            transition: transform 0.3s ease;
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Error state */
+        .error-msg {
+            text-align: center;
+            padding: 40px 20px;
+            color: #e94560;
+        }
+
+        .error-msg p {
+            margin-top: 8px;
+            color: #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="preview-container">
+        <video id="preview" autoplay muted playsinline></video>
+
+        <div class="placeholder" id="placeholder">
+            <div class="icon">&#127909;</div>
+            <p>Tap record to start</p>
+        </div>
+
+        <div class="timer" id="timer">
+            <span class="dot"></span>
+            <span id="timerText">00:00</span>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">Video saved!</div>
+
+    <div class="controls">
+        <!-- Switch camera -->
+        <button class="btn-side" id="btnSwitch" title="Switch camera">
+            <svg viewBox="0 0 24 24"><path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/><path d="M12 10.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5z"/></svg>
+        </button>
+
+        <!-- Record / Stop -->
+        <button class="btn-record" id="btnRecord" title="Record">
+            <div class="inner"></div>
+        </button>
+
+        <!-- Download last video -->
+        <button class="btn-side" id="btnDownload" disabled title="Download last recording">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        </button>
+    </div>
+
+    <script>
+        const preview = document.getElementById('preview');
+        const placeholder = document.getElementById('placeholder');
+        const timer = document.getElementById('timer');
+        const timerText = document.getElementById('timerText');
+        const toast = document.getElementById('toast');
+        const btnRecord = document.getElementById('btnRecord');
+        const btnSwitch = document.getElementById('btnSwitch');
+        const btnDownload = document.getElementById('btnDownload');
+
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let stream = null;
+        let timerInterval = null;
+        let startTime = 0;
+        let isRecording = false;
+        let facingMode = 'environment'; // rear camera by default
+        let lastBlobUrl = null;
+
+        // Pick a supported mime type
+        function getSupportedMimeType() {
+            const types = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm',
+                'video/mp4',
+            ];
+            for (const type of types) {
+                if (MediaRecorder.isTypeSupported(type)) return type;
+            }
+            return '';
+        }
+
+        async function startCamera() {
+            // Stop any existing stream
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+            }
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: true,
+                });
+                preview.srcObject = stream;
+                placeholder.style.display = 'none';
+                return true;
+            } catch (err) {
+                console.error('Camera error:', err);
+                placeholder.innerHTML = `
+                    <div class="error-msg">
+                        <div class="icon">&#128274;</div>
+                        <strong>Camera access denied</strong>
+                        <p>Allow camera & microphone access in your browser settings and reload.</p>
+                    </div>`;
+                return false;
+            }
+        }
+
+        function startRecording() {
+            recordedChunks = [];
+            const mimeType = getSupportedMimeType();
+            const options = mimeType ? { mimeType } : {};
+
+            try {
+                mediaRecorder = new MediaRecorder(stream, options);
+            } catch (e) {
+                mediaRecorder = new MediaRecorder(stream);
+            }
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                saveRecording();
+            };
+
+            mediaRecorder.start(100); // collect data every 100ms
+            isRecording = true;
+            btnRecord.classList.add('recording');
+            btnSwitch.disabled = true;
+            timer.classList.add('visible');
+            startTime = Date.now();
+            updateTimer();
+            timerInterval = setInterval(updateTimer, 500);
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            isRecording = false;
+            btnRecord.classList.remove('recording');
+            btnSwitch.disabled = false;
+            timer.classList.remove('visible');
+            clearInterval(timerInterval);
+        }
+
+        function saveRecording() {
+            const mimeType = mediaRecorder.mimeType || 'video/webm';
+            const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+            const blob = new Blob(recordedChunks, { type: mimeType });
+
+            // Revoke old blob url
+            if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
+            lastBlobUrl = URL.createObjectURL(blob);
+
+            // Auto-download
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const a = document.createElement('a');
+            a.href = lastBlobUrl;
+            a.download = `recording-${timestamp}.${ext}`;
+            a.click();
+
+            btnDownload.disabled = false;
+            showToast('Video saved to Downloads!');
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+            const secs = String(elapsed % 60).padStart(2, '0');
+            timerText.textContent = `${mins}:${secs}`;
+        }
+
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // Event listeners
+        btnRecord.addEventListener('click', async () => {
+            if (!isRecording) {
+                if (!stream) {
+                    const ok = await startCamera();
+                    if (!ok) return;
+                }
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+
+        btnSwitch.addEventListener('click', async () => {
+            facingMode = facingMode === 'environment' ? 'user' : 'environment';
+            await startCamera();
+        });
+
+        btnDownload.addEventListener('click', () => {
+            if (lastBlobUrl) {
+                const ext = (mediaRecorder && mediaRecorder.mimeType || '').includes('mp4') ? 'mp4' : 'webm';
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const a = document.createElement('a');
+                a.href = lastBlobUrl;
+                a.download = `recording-${timestamp}.${ext}`;
+                a.click();
+            }
+        });
+
+        // Start camera on load
+        startCamera();
+
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
