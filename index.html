@@ -78,6 +78,18 @@
             cursor: pointer; margin-top: 8px; padding: 8px;
         }
 
+        /* ── Server IP input ── */
+        .server-config {
+            width: 100%; max-width: 280px; margin-top: 4px;
+        }
+        .server-config label { font-size: 12px; color: #666; }
+        .server-ip-input {
+            width: 100%; padding: 10px; border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px; background: rgba(255,255,255,0.05); color: #fff;
+            font-size: 14px; text-align: center; font-family: monospace; outline: none;
+        }
+        .server-ip-input:focus { border-color: #e94560; }
+
         /* ── Sync Status ── */
         .sync-status {
             font-size: 13px; color: #888; text-align: center; margin-top: 8px;
@@ -86,15 +98,72 @@
         .sync-status.synced { color: #28a745; }
         .sync-status.error { color: #e94560; }
 
-        /* ── Recording Screen ── */
+        /* ── Shared preview styles ── */
         .preview-container {
             flex: 1; position: relative; display: flex;
             align-items: center; justify-content: center;
             background: #111; overflow: hidden;
         }
 
-        video#preview { width: 100%; height: 100%; object-fit: cover; }
+        video.cam-preview { width: 100%; height: 100%; object-fit: cover; }
 
+        /* ── Detection Screen ── */
+        .detection-overlay {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            padding: 24px 20px 20px;
+        }
+
+        .confidence-bar {
+            width: 100%; height: 8px; background: rgba(255,255,255,0.15);
+            border-radius: 4px; overflow: hidden; margin-bottom: 8px;
+        }
+        .confidence-fill {
+            height: 100%; width: 0%; border-radius: 4px;
+            transition: width 0.2s, background 0.3s;
+        }
+
+        .confidence-text {
+            font-size: 32px; font-weight: 800; text-align: center;
+            font-variant-numeric: tabular-nums; transition: color 0.3s;
+        }
+
+        .detection-label {
+            font-size: 13px; color: #999; text-align: center; margin-top: 4px;
+        }
+
+        .partner-status-bar {
+            position: absolute; top: 16px; left: 16px; right: 16px;
+            display: flex; justify-content: space-between; gap: 12px;
+        }
+
+        .player-badge {
+            flex: 1; background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 8px 12px; border-radius: 12px;
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px;
+        }
+        .player-badge .badge-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #555;
+            transition: background 0.3s;
+        }
+        .player-badge .badge-dot.ready { background: #28a745; }
+        .player-badge .badge-dot.detecting { background: #f0ad4e; }
+        .player-badge .badge-conf { font-family: monospace; margin-left: auto; }
+
+        .countdown-overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.6);
+            display: none; align-items: center; justify-content: center;
+            flex-direction: column; gap: 8px; z-index: 60;
+        }
+        .countdown-overlay.visible { display: flex; }
+        .countdown-number {
+            font-size: 72px; font-weight: 900; color: #28a745;
+        }
+        .countdown-label { font-size: 16px; color: #ccc; }
+
+        /* ── Recording Screen ── */
         .timer {
             position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
             background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
@@ -107,7 +176,6 @@
         .timer .dot { width: 10px; height: 10px; background: #e94560; border-radius: 50%; animation: blink 1s infinite; }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-        /* Connection badge */
         .conn-badge {
             position: absolute; top: 16px; right: 16px;
             background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
@@ -120,7 +188,6 @@
         }
         .conn-badge .indicator.disconnected { background: #e94560; }
 
-        /* Match info */
         .match-info {
             position: absolute; top: 16px; left: 16px;
             background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
@@ -171,7 +238,6 @@
         }
         .toast.show { transform: translateX(-50%) translateY(0); }
 
-        /* Waiting overlay */
         .waiting-overlay {
             position: absolute; inset: 0; background: rgba(0,0,0,0.7);
             display: none; align-items: center; justify-content: center;
@@ -194,21 +260,18 @@
     <h1>Shuttle Recorder</h1>
     <p class="sub">Pair two phones to record a match from both sides with synced timestamps.</p>
 
-    <!-- Initial buttons -->
     <div id="pairingButtons">
         <button class="btn-primary btn-create" id="btnCreate">Create Room</button>
         <div class="divider">or</div>
         <button class="btn-primary btn-join" id="btnJoin">Join Room</button>
     </div>
 
-    <!-- Code display (after creating) -->
     <div class="code-display" id="codeDisplay" style="display:none">
         <div class="label">Share this code</div>
         <div class="code" id="roomCodeText">------</div>
         <div class="status" id="codeStatus">Waiting for opponent...</div>
     </div>
 
-    <!-- Code input (after clicking join) -->
     <div class="code-input-group" id="codeInputGroup" style="display:none">
         <input class="code-input" id="codeInput" type="text" maxlength="6" placeholder="Enter code" autocomplete="off" />
         <button class="btn-submit" id="btnSubmitCode" disabled>Join</button>
@@ -216,12 +279,50 @@
 
     <div class="sync-status" id="syncStatus"></div>
     <button class="btn-back" id="btnBackToPairing" style="display:none">Back</button>
+
+    <div class="server-config">
+        <label>Server IP (your Mac)</label>
+        <input class="server-ip-input" id="serverIpInput" type="text" placeholder="192.168.1.X:8000" />
+    </div>
 </div>
 
-<!-- ═══════ SCREEN 2: RECORDING ═══════ -->
+<!-- ═══════ SCREEN 2: COURT DETECTION ═══════ -->
+<div class="screen" id="screenDetection">
+    <div class="preview-container">
+        <video id="detectionPreview" class="cam-preview" autoplay muted playsinline></video>
+
+        <div class="partner-status-bar">
+            <div class="player-badge">
+                <span class="badge-dot" id="myBadgeDot"></span>
+                <span>You</span>
+                <span class="badge-conf" id="myBadgeConf">0%</span>
+            </div>
+            <div class="player-badge">
+                <span class="badge-dot" id="partnerBadgeDot"></span>
+                <span>Partner</span>
+                <span class="badge-conf" id="partnerBadgeConf">--</span>
+            </div>
+        </div>
+
+        <div class="detection-overlay">
+            <div class="confidence-bar">
+                <div class="confidence-fill" id="confidenceFill"></div>
+            </div>
+            <div class="confidence-text" id="confidenceText">0%</div>
+            <div class="detection-label" id="detectionLabel">Point camera at the court</div>
+        </div>
+
+        <div class="countdown-overlay" id="countdownOverlay">
+            <div class="countdown-number" id="countdownNumber">3</div>
+            <div class="countdown-label">Both courts detected</div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════ SCREEN 3: RECORDING ═══════ -->
 <div class="screen" id="screenRecording">
     <div class="preview-container">
-        <video id="preview" autoplay muted playsinline></video>
+        <video id="preview" class="cam-preview" autoplay muted playsinline></video>
 
         <div class="timer" id="timer">
             <span class="dot"></span>
@@ -260,7 +361,7 @@
 <!-- ═══════ Firebase SDK ═══════ -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect, serverTimestamp }
+import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect }
     from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
 
 // ── Firebase config ──
@@ -277,8 +378,8 @@ const db = getDatabase(app);
 
 // ── State ──
 let roomCode = '';
-let playerId = '';  // 'p1' or 'p2'
-let clockOffset = 0; // ms offset to align with partner
+let playerId = '';
+let clockOffset = 0;
 let isRecording = false;
 let mediaRecorder = null;
 let recordedChunks = [];
@@ -290,9 +391,24 @@ let frameTimestamps = [];
 let lastBlobUrl = null;
 let unsubscribers = [];
 
+// Court detection state
+let courtWs = null;
+let courtConfidence = 0;
+let partnerConfidence = 0;
+let bothReadySince = 0;
+let detectionCanvas = null;
+let detectionInterval = null;
+const CONFIDENCE_START = 0.95;
+const CONFIDENCE_STOP = 0.90;
+const READY_DURATION_MS = 3000;
+
+// Audio context for whistle (unlocked on first user gesture)
+let audioCtx = null;
+
 // ── DOM refs ──
 const $ = id => document.getElementById(id);
 const screenPairing = $('screenPairing');
+const screenDetection = $('screenDetection');
 const screenRecording = $('screenRecording');
 const pairingButtons = $('pairingButtons');
 const codeDisplay = $('codeDisplay');
@@ -303,32 +419,101 @@ const codeInput = $('codeInput');
 const btnSubmitCode = $('btnSubmitCode');
 const syncStatus = $('syncStatus');
 const btnBackToPairing = $('btnBackToPairing');
+const serverIpInput = $('serverIpInput');
+const detectionPreview = $('detectionPreview');
+const confidenceFill = $('confidenceFill');
+const confidenceText = $('confidenceText');
+const detectionLabel = $('detectionLabel');
+const myBadgeDot = $('myBadgeDot');
+const myBadgeConf = $('myBadgeConf');
+const partnerBadgeDot = $('partnerBadgeDot');
+const partnerBadgeConf = $('partnerBadgeConf');
+const countdownOverlay = $('countdownOverlay');
+const countdownNumber = $('countdownNumber');
 const preview = $('preview');
 const timer = $('timer');
 const timerText = $('timerText');
 const matchInfo = $('matchInfo');
-const connBadge = $('connBadge');
 const connIndicator = $('connIndicator');
 const connText = $('connText');
 const waitingOverlay = $('waitingOverlay');
-const waitingText = $('waitingText');
 const toast = $('toast');
 const btnRecord = $('btnRecord');
 const btnSwitch = $('btnSwitch');
 const btnDownload = $('btnDownload');
+
+// ── Server URL ──
+serverIpInput.value = localStorage.getItem('serverUrl') || '';
+serverIpInput.addEventListener('change', () => {
+    localStorage.setItem('serverUrl', serverIpInput.value.trim());
+});
+
+function getServerUrl() {
+    const val = serverIpInput.value.trim();
+    if (!val) return null;
+    // Add ws:// if not present
+    if (val.startsWith('ws://') || val.startsWith('wss://')) return val;
+    return `ws://${val}`;
+}
+
+function getServerHttpUrl() {
+    const val = serverIpInput.value.trim();
+    if (!val) return null;
+    if (val.startsWith('http://') || val.startsWith('https://')) return val;
+    return `http://${val}`;
+}
+
+// ── Unlock audio on first gesture ──
+function unlockAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Play silent buffer to unlock
+    const buf = audioCtx.createBuffer(1, 1, 22050);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    src.start(0);
+}
+
+function playWhistle() {
+    if (!audioCtx) return;
+    // Generate a short whistle tone (two-tone beep)
+    const now = audioCtx.currentTime;
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(2000, now);
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(2500, now);
+
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + 0.8);
+    osc2.stop(now + 0.8);
+}
 
 // ═══════════════════════════════════
 // PAIRING
 // ═══════════════════════════════════
 
 function generateCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
     return code;
 }
 
 $('btnCreate').addEventListener('click', async () => {
+    unlockAudio();
     roomCode = generateCode();
     playerId = 'p1';
     pairingButtons.style.display = 'none';
@@ -339,17 +524,14 @@ $('btnCreate').addEventListener('click', async () => {
     codeStatus.className = 'status';
     syncStatus.textContent = '';
 
-    // Write room to Firebase
     await set(ref(db, `rooms/${roomCode}`), {
         p1: { joined: true, online: true },
         status: 'waiting',
         createdAt: Date.now()
     });
 
-    // Clean up on disconnect
     onDisconnect(ref(db, `rooms/${roomCode}/p1/online`)).set(false);
 
-    // Listen for p2 joining
     const unsub = onValue(ref(db, `rooms/${roomCode}/status`), (snap) => {
         const status = snap.val();
         if (status === 'paired') {
@@ -363,6 +545,7 @@ $('btnCreate').addEventListener('click', async () => {
 });
 
 $('btnJoin').addEventListener('click', () => {
+    unlockAudio();
     pairingButtons.style.display = 'none';
     codeInputGroup.style.display = 'block';
     btnBackToPairing.style.display = 'block';
@@ -380,7 +563,6 @@ btnSubmitCode.addEventListener('click', async () => {
     btnSubmitCode.disabled = true;
     syncStatus.textContent = 'Joining...';
 
-    // Check if room exists
     const snap = await get(ref(db, `rooms/${roomCode}`));
     if (!snap.exists()) {
         syncStatus.textContent = 'Room not found. Check the code.';
@@ -389,7 +571,6 @@ btnSubmitCode.addEventListener('click', async () => {
         return;
     }
 
-    // Join the room
     await update(ref(db, `rooms/${roomCode}`), {
         'p2/joined': true,
         'p2/online': true,
@@ -409,7 +590,6 @@ btnSubmitCode.addEventListener('click', async () => {
 });
 
 btnBackToPairing.addEventListener('click', () => {
-    // Cleanup
     unsubscribers.forEach(fn => fn());
     unsubscribers = [];
     if (roomCode && playerId) {
@@ -428,35 +608,26 @@ btnBackToPairing.addEventListener('click', () => {
 });
 
 // ═══════════════════════════════════
-// CLOCK SYNC (NTP-style via Firebase)
+// CLOCK SYNC
 // ═══════════════════════════════════
 
 async function startClockSync() {
     syncStatus.textContent = 'Syncing clocks...';
-    const partnerId = playerId === 'p1' ? 'p2' : 'p1';
-    const syncRef = ref(db, `rooms/${roomCode}/sync`);
     const offsets = [];
 
     if (playerId === 'p1') {
-        // P1 initiates: write timestamps, P2 responds
         for (let i = 0; i < 10; i++) {
-            const t1 = performance.now() + performance.timeOrigin; // epoch ms
+            const t1 = performance.now() + performance.timeOrigin;
             await set(ref(db, `rooms/${roomCode}/sync/ping`), { from: 'p1', t1, i });
 
-            // Wait for pong
             const pong = await waitForValue(ref(db, `rooms/${roomCode}/sync/pong`), v => v && v.i === i);
             const t4 = performance.now() + performance.timeOrigin;
-            const t2 = pong.t2; // P2's receive time
-            const t3 = pong.t3; // P2's send time
 
-            const roundTrip = (t4 - t1) - (t3 - t2);
-            const offset = ((t2 - t1) + (t3 - t4)) / 2;
+            const offset = ((pong.t2 - t1) + (pong.t3 - t4)) / 2;
             offsets.push(offset);
-
             syncStatus.textContent = `Syncing clocks... (${i + 1}/10)`;
         }
 
-        // Median offset
         offsets.sort((a, b) => a - b);
         clockOffset = offsets[Math.floor(offsets.length / 2)];
 
@@ -464,17 +635,15 @@ async function startClockSync() {
         syncStatus.textContent = `Synced! Offset: ${clockOffset.toFixed(1)}ms`;
         syncStatus.className = 'sync-status synced';
 
-        setTimeout(() => goToRecordingScreen(), 800);
+        setTimeout(() => goToDetectionScreen(), 800);
 
     } else {
-        // P2 responds to pings
         let responded = 0;
         const unsub = onValue(ref(db, `rooms/${roomCode}/sync/ping`), async (snap) => {
             const data = snap.val();
             if (!data || data.from !== 'p1') return;
 
             const t2 = performance.now() + performance.timeOrigin;
-            // Small delay to write response
             const t3 = performance.now() + performance.timeOrigin;
             await set(ref(db, `rooms/${roomCode}/sync/pong`), { t2, t3, i: data.i });
             responded++;
@@ -482,56 +651,54 @@ async function startClockSync() {
         });
         unsubscribers.push(unsub);
 
-        // Wait for result
         const result = await waitForValue(ref(db, `rooms/${roomCode}/sync/result`), v => v && v.by === 'p1');
-        clockOffset = -result.offset; // Reverse offset for P2
+        clockOffset = -result.offset;
         syncStatus.textContent = `Synced! Offset: ${clockOffset.toFixed(1)}ms`;
         syncStatus.className = 'sync-status synced';
 
-        setTimeout(() => goToRecordingScreen(), 800);
+        setTimeout(() => goToDetectionScreen(), 800);
     }
 }
 
 function waitForValue(dbRef, condition, timeoutMs = 15000) {
     return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            unsub();
-            reject(new Error('Sync timeout'));
-        }, timeoutMs);
-
+        const t = setTimeout(() => { unsub(); reject(new Error('Sync timeout')); }, timeoutMs);
         const unsub = onValue(dbRef, (snap) => {
             const val = snap.val();
-            if (condition(val)) {
-                clearTimeout(timer);
-                unsub();
-                resolve(val);
-            }
+            if (condition(val)) { clearTimeout(t); unsub(); resolve(val); }
         });
     });
 }
 
 // ═══════════════════════════════════
-// RECORDING SCREEN
+// COURT DETECTION SCREEN
 // ═══════════════════════════════════
 
-async function goToRecordingScreen() {
+async function goToDetectionScreen() {
     screenPairing.classList.remove('active');
-    screenRecording.classList.add('active');
-    matchInfo.textContent = roomCode;
+    screenDetection.classList.add('active');
 
-    await startCamera();
-    listenForRecordingSignals();
-    listenForPartnerOnline();
+    await startCameraFor(detectionPreview);
+
+    const serverUrl = getServerUrl();
+    if (!serverUrl) {
+        detectionLabel.textContent = 'No server IP set. Skipping court detection...';
+        setTimeout(() => goToRecordingScreen(), 2000);
+        return;
+    }
+
+    startCourtDetection();
+    listenForPartnerConfidence();
 }
 
-async function startCamera() {
+async function startCameraFor(videoEl) {
     if (stream) stream.getTracks().forEach(t => t.stop());
     try {
         stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
             audio: true,
         });
-        preview.srcObject = stream;
+        videoEl.srcObject = stream;
         return true;
     } catch (err) {
         console.error('Camera error:', err);
@@ -540,7 +707,177 @@ async function startCamera() {
     }
 }
 
-// ── Listen for start/stop signals ──
+function startCourtDetection() {
+    const serverUrl = getServerUrl();
+    const wsUrl = `${serverUrl}/ws/court-detection/${roomCode}/${playerId}`;
+
+    detectionLabel.textContent = 'Connecting to server...';
+
+    courtWs = new WebSocket(wsUrl);
+
+    courtWs.onopen = () => {
+        detectionLabel.textContent = 'Point camera at the court';
+        detectionCanvas = document.createElement('canvas');
+        detectionCanvas.width = 256;
+        detectionCanvas.height = 256;
+
+        // Send frames at 5fps
+        detectionInterval = setInterval(captureAndSendFrame, 200);
+    };
+
+    courtWs.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        courtConfidence = data.confidence;
+        updateConfidenceUI(courtConfidence);
+        reportConfidenceToFirebase(courtConfidence);
+        checkBothReady();
+    };
+
+    courtWs.onerror = (err) => {
+        console.error('Court WS error:', err);
+        detectionLabel.textContent = 'Server connection failed. Skipping...';
+        stopCourtDetection();
+        setTimeout(() => goToRecordingScreen(), 2000);
+    };
+
+    courtWs.onclose = () => {
+        if (detectionInterval) {
+            clearInterval(detectionInterval);
+            detectionInterval = null;
+        }
+    };
+}
+
+function captureAndSendFrame() {
+    if (!courtWs || courtWs.readyState !== WebSocket.OPEN) return;
+    if (!stream || !detectionPreview.videoWidth) return;
+
+    const ctx = detectionCanvas.getContext('2d');
+    ctx.drawImage(detectionPreview, 0, 0, 256, 256);
+
+    detectionCanvas.toBlob((blob) => {
+        if (blob && courtWs && courtWs.readyState === WebSocket.OPEN) {
+            blob.arrayBuffer().then(buf => courtWs.send(buf));
+        }
+    }, 'image/jpeg', 0.7);
+}
+
+function updateConfidenceUI(conf) {
+    const pct = Math.round(conf * 100);
+    confidenceText.textContent = `${pct}%`;
+    confidenceFill.style.width = `${pct}%`;
+
+    let color;
+    if (conf >= CONFIDENCE_START) {
+        color = '#28a745';
+        detectionLabel.textContent = 'Court detected!';
+    } else if (conf >= 0.5) {
+        color = '#f0ad4e';
+        detectionLabel.textContent = 'Adjusting...';
+    } else {
+        color = '#e94560';
+        detectionLabel.textContent = 'Point camera at the court';
+    }
+
+    confidenceFill.style.background = color;
+    confidenceText.style.color = color;
+
+    myBadgeConf.textContent = `${pct}%`;
+    myBadgeDot.className = conf >= CONFIDENCE_START ? 'badge-dot ready' :
+                           conf >= 0.5 ? 'badge-dot detecting' : 'badge-dot';
+}
+
+async function reportConfidenceToFirebase(conf) {
+    try {
+        await set(ref(db, `rooms/${roomCode}/${playerId}/courtConfidence`), {
+            value: conf,
+            timestamp: Date.now()
+        });
+    } catch (e) { /* ignore */ }
+}
+
+function listenForPartnerConfidence() {
+    const partnerId = playerId === 'p1' ? 'p2' : 'p1';
+    const unsub = onValue(ref(db, `rooms/${roomCode}/${partnerId}/courtConfidence`), (snap) => {
+        const data = snap.val();
+        if (!data) return;
+        partnerConfidence = data.value;
+        const pct = Math.round(partnerConfidence * 100);
+        partnerBadgeConf.textContent = `${pct}%`;
+        partnerBadgeDot.className = partnerConfidence >= CONFIDENCE_START ? 'badge-dot ready' :
+                                    partnerConfidence >= 0.5 ? 'badge-dot detecting' : 'badge-dot';
+        checkBothReady();
+    });
+    unsubscribers.push(unsub);
+}
+
+function checkBothReady() {
+    if (courtConfidence >= CONFIDENCE_START && partnerConfidence >= CONFIDENCE_START) {
+        if (bothReadySince === 0) {
+            bothReadySince = Date.now();
+        }
+
+        const elapsed = Date.now() - bothReadySince;
+        const remaining = Math.ceil((READY_DURATION_MS - elapsed) / 1000);
+
+        countdownOverlay.classList.add('visible');
+        countdownNumber.textContent = Math.max(remaining, 0);
+
+        if (elapsed >= READY_DURATION_MS) {
+            triggerAutoRecording();
+        }
+    } else {
+        bothReadySince = 0;
+        countdownOverlay.classList.remove('visible');
+    }
+}
+
+async function triggerAutoRecording() {
+    // Stop court detection
+    stopCourtDetection();
+
+    // Play whistle
+    playWhistle();
+
+    // Signal recording start via Firebase
+    await set(ref(db, `rooms/${roomCode}/recording`), {
+        action: 'start',
+        startedBy: 'auto-court-detection',
+        epoch: performance.now() + performance.timeOrigin
+    });
+
+    // Transition to recording screen
+    goToRecordingScreen();
+}
+
+function stopCourtDetection() {
+    if (detectionInterval) {
+        clearInterval(detectionInterval);
+        detectionInterval = null;
+    }
+    if (courtWs && courtWs.readyState === WebSocket.OPEN) {
+        courtWs.close();
+    }
+    courtWs = null;
+}
+
+// ═══════════════════════════════════
+// RECORDING SCREEN
+// ═══════════════════════════════════
+
+async function goToRecordingScreen() {
+    screenPairing.classList.remove('active');
+    screenDetection.classList.remove('active');
+    screenRecording.classList.add('active');
+    matchInfo.textContent = roomCode;
+
+    // Reattach stream to recording preview
+    preview.srcObject = stream;
+
+    listenForRecordingSignals();
+    listenForPartnerOnline();
+}
+
 function listenForRecordingSignals() {
     const unsub = onValue(ref(db, `rooms/${roomCode}/recording`), (snap) => {
         const data = snap.val();
@@ -549,7 +886,7 @@ function listenForRecordingSignals() {
         if (data.action === 'start' && !isRecording) {
             beginRecording(data.startedBy);
         } else if (data.action === 'stop' && isRecording) {
-            endRecording(false); // false = triggered by partner
+            endRecording(false);
         }
     });
     unsubscribers.push(unsub);
@@ -570,17 +907,15 @@ function listenForPartnerOnline() {
     unsubscribers.push(unsub);
 }
 
-// ── Record button ──
+// ── Record button (manual override) ──
 btnRecord.addEventListener('click', async () => {
     if (!isRecording) {
-        // Signal both phones to start
         await set(ref(db, `rooms/${roomCode}/recording`), {
             action: 'start',
             startedBy: playerId,
             epoch: performance.now() + performance.timeOrigin
         });
     } else {
-        // Signal both phones to stop
         await set(ref(db, `rooms/${roomCode}/recording`), {
             action: 'stop',
             stoppedBy: playerId,
@@ -614,6 +949,11 @@ function beginRecording(startedBy) {
     timer.classList.add('visible');
     waitingOverlay.classList.remove('visible');
 
+    // Play whistle if auto-triggered (and we haven't already)
+    if (startedBy === 'auto-court-detection') {
+        playWhistle();
+    }
+
     const startMs = Date.now();
     timerInterval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startMs) / 1000);
@@ -622,10 +962,11 @@ function beginRecording(startedBy) {
             String(elapsed % 60).padStart(2, '0');
     }, 500);
 
-    // Start logging frame timestamps
     startFrameLogging();
 
-    showToast(startedBy === playerId ? 'Recording started' : 'Partner started recording');
+    showToast(startedBy === playerId ? 'Recording started' :
+              startedBy === 'auto-court-detection' ? 'Court detected - Recording!' :
+              'Partner started recording');
 }
 
 function endRecording(selfTriggered = true) {
@@ -649,7 +990,6 @@ function startFrameLogging() {
     const videoEl = preview;
 
     if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-        // High-precision per-frame timestamps
         function onFrame(now, metadata) {
             if (!frameLoggingActive) return;
             frameTimestamps.push({
@@ -662,7 +1002,6 @@ function startFrameLogging() {
         }
         videoEl.requestVideoFrameCallback(onFrame);
     } else {
-        // Fallback: log at ~30fps using requestAnimationFrame
         function onFrame() {
             if (!frameLoggingActive) return;
             frameTimestamps.push({
@@ -687,14 +1026,11 @@ function saveRecording() {
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const baseName = `${roomCode}_${playerId}_${ts}`;
 
-    // Release old blob
     if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
     lastBlobUrl = URL.createObjectURL(blob);
 
-    // Download video
     downloadFile(lastBlobUrl, `${baseName}.${ext}`);
 
-    // Build metadata
     const metadata = {
         roomCode,
         playerId,
@@ -709,7 +1045,6 @@ function saveRecording() {
         frames: frameTimestamps
     };
 
-    // Download metadata JSON
     const metaBlob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' });
     const metaUrl = URL.createObjectURL(metaBlob);
     downloadFile(metaUrl, `${baseName}_timestamps.json`);
@@ -746,13 +1081,12 @@ function showToast(msg) {
     setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
-// ── Switch camera ──
 btnSwitch.addEventListener('click', async () => {
     facingMode = facingMode === 'environment' ? 'user' : 'environment';
-    await startCamera();
+    await startCameraFor(isRecording ? preview : detectionPreview);
+    if (!isRecording) preview.srcObject = stream;
 });
 
-// ── Re-download last video ──
 btnDownload.addEventListener('click', () => {
     if (lastBlobUrl) {
         const ext = (mediaRecorder?.mimeType || '').includes('mp4') ? 'mp4' : 'webm';
